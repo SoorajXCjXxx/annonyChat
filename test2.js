@@ -1,12 +1,12 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
-const botToken = '7070609287:AAFpGweC4CDQdZHaX_O2URA1gQTQaJRT8EE';
+const botToken = '6699625473:AAF4v6NLNqsLC_gsNR21iurb_UhZltqf0n0';
 const bot = new TelegramBot(botToken, { polling: true });
 const express = require('express');
 // Create an Express application
 const app = express();
-let dataBase;
-let collection;
+const {Mutex} = require("async-mutex");
+const mutex = new Mutex();
 // Connection URI
 const uri = 'mongodb+srv://Geek:Wu2wm5ltnipo3FcP@chatbot.rm39fbb.mongodb.net/?retryWrites=true&w=majority&appName=chatbot';
 
@@ -21,14 +21,14 @@ const client = new MongoClient(uri, {
     }
   });
 
-dataBase = client.db("users");
-collection = dataBase.collection("data");
+// man made moduels
 
+const backup = require("./socure/backup");
+let ownerId = "6798013182"
 
 
 // Middleware to parse JSON bodies
-let genderQuee = {}; //chatId:gender
-let waitingQuee = []; // [{}] = [{chatId:chatId}];
+
 let messageQuee = {};// {chatId:chaId};
 let inMessage = []; // [chatId];
 let replyQuee = {}; // {chatId:[1,2]}, in that number inside array means the value or the key of reply listner
@@ -46,8 +46,9 @@ let helpLine = `🚨 Bot သုံးနည်း
 
 ⚠️ အထက်ပါဖော်ပြထားသော commands များကို စားရိုက်ပြီးပို့နိုင်သလို အဲ့ command များကို ဖော်ပြထားသော နေရာတွင် နှိပ်၍လဲ သုံးနိုင်သည်။`
 
+
+
 async function checkUserAuth(chatId) {
-    
     // this function check the user auth if the user  registerd it will return true
     // if not then flase will return
     try {
@@ -56,16 +57,16 @@ async function checkUserAuth(chatId) {
         let collection = dataBase.collection("data");
         let userData = await collection.find({chatId}).toArray();
         if (userData[0]!=undefined) {
-            client.close();
             return true;
         }
-        client.close();
         return false;
     }
     catch (err) {
-        client.close();
         console.log(err);
         return "error";
+    }
+    finally{
+        client.close();
     }
 }
 
@@ -75,8 +76,6 @@ function register(msg) {
     return new Promise(async (res, rej) => {
         try {
             let chatId = msg.from.id;
-
-            await bot.sendMessage(chatId, "🌐-Rigister require! \n\nစသုံးသူ အနေနဲ့သင်၏ အသက်နှင့်\n\nကျားမ ရွေးပေးရမည်");
 
             let name = msg.from.first_name;
             if (msg.from.last_name != undefined) {
@@ -94,7 +93,7 @@ function register(msg) {
             let replyIndex; // is it for the age after user has entered his age that replylistern must of delete
             let setTime;    // to remove the setTimeout that is used to close the replyListern if there is not respose form the user
 
-
+            await bot.sendMessage(chatId, "🌐-Rigister require! \n\nစသုံးသူ အနေနဲ့သင်၏ အသက်နှင့်\n\nကျားမ ရွေးပေးရမည်");
             let ageMessage = await bot.sendMessage(chatId, "📆 𝙋𝙡𝙚𝙖𝙨𝙚 𝙚𝙣𝙩𝙚𝙧 𝙮𝙤𝙪𝙧 𝙖𝙜𝙚!\n\n 📆 သင်၏အသက်ကိုထည့်ပါ။", {
                 reply_markup: {
                     force_reply: true
@@ -102,7 +101,7 @@ function register(msg) {
             });
 
             let ageResponse = await new Promise((res, rej) => {
-                // if uses do not do anything after 20 seconds that replyLister for the age will be deleted automatically
+                // if uses do not do anything after 1 mins that replyLister for the age will be deleted automatically
                 // and function will return false that indicate the end of the function
 
                 setTime = setTimeout(() => {
@@ -202,21 +201,24 @@ function register(msg) {
 
         }
         catch (err) {
+            client.close();
             res(false);
         }
     })
 }
 
+let waitingQuee = []; // [{}] = [{chatId:chatId}];
 
-function matchUser(chatId) {
+async function matchUser(chatId) {
     try {
+        await mutex.acquire();
         if (waitingQuee[0] == undefined) {
             waitingQuee.push(chatId);
-            bot.sendMessage(chatId, "🔎 𝙨𝙚𝙖𝙧𝙘𝙝𝙞𝙣𝙜 𝙛𝙤𝙧 𝙥𝙖𝙧𝙩𝙣𝙚𝙧......");
+            bot.sendMessage(chatId, "🔎 partner ရှာနေပါသည် .....s");
             return false;
         }
         else if (waitingQuee[0] == chatId) {
-            bot.sendMessage(chatId, "🤧 Already searching for partner .....");
+            bot.sendMessage(chatId, "🤧 ရှာနေပါသည် ခန စောင့်ပါ .....");
             return false;
         }
         else if (waitingQuee[0] != undefined && waitingQuee[0] != chatId) {
@@ -233,17 +235,17 @@ function matchUser(chatId) {
     catch (err) {
         console.log(err);
     }
+
+    finally{
+        mutex.release();
+    }
 }
 
-function connectBothUser(chatId1, chatId2) {
+async function connectBothUser(chatId1, chatId2) {
     try {
         let template = `partner တွေ့ရှိပါသည်🎉\n\n /next နောက်တစ်ယောက်ရှာရန်😜\n\n /stop ရပ်တန့်ရန်🥲`
-        bot.sendMessage(chatId1, template).catch((err) => {
-            console.log(err.message);
-        })
-        bot.sendMessage(chatId2, template).catch((err) => {
-            console.log(err.message);
-        })
+        await bot.sendMessage(chatId1, template);
+        await bot.sendMessage(chatId2, template);
 
         inMessage.push(chatId1);
         inMessage.push(chatId2);
@@ -259,6 +261,10 @@ function connectBothUser(chatId1, chatId2) {
 }
 
 
+// mainHandler check wheathe use is auth or not
+// if user is auth then find another else add current use in waitingQuee
+// at last connect them with their chatId like chatId1:chatId2 and chatId2:chatId1
+// and add to meesageQuee{};
 
 async function mainHandler(msg) {
     try{
@@ -268,24 +274,23 @@ async function mainHandler(msg) {
         let chatId = msg.chat.id;
         let isAuth = await checkUserAuth(chatId);
         if (isAuth == false) {
-            register(msg).then((val) => {
-                if (val == false) {
-                    bot.sendMessage(chatId, "⚠️ Fail to register your account");
-                    return;
+            
+            let registerStatus = await register(msg);
+            if(registerStatus==false){
+                await bot.sendMessage(chatId, "⚠️ Fail to register your account");
+                return;
+            }
+            else if(registerStatus==true){
+                let usersDeatils = await matchUser(chatId);
+                if(usersDeatils!=false){
+                    await connectBothUser(usersDeatils.chatId1, usersDeatils.chatId2);
                 }
-    
-                else if (val == true) {
-                    let usersDeatils = matchUser(chatId);
-                    if (usersDeatils != false) {
-                        connectBothUser(usersDeatils.chatId1, usersDeatils.chatId2);
-                    }
-                }
-            })
+            }
         }
         else {
-            let usersDeatils = matchUser(chatId);
+            let usersDeatils = await matchUser(chatId);
             if (usersDeatils != false) {
-                connectBothUser(usersDeatils.chatId1, usersDeatils.chatId2);
+                await connectBothUser(usersDeatils.chatId1, usersDeatils.chatId2);
             }
         }
     }
@@ -377,7 +382,6 @@ bot.on("message", async(msg) => {
             }
             else {
                 bot.sendMessage(msg.chat.id, "🤪 𝙔𝙤𝙪 𝙖𝙧𝙚 𝙖𝙡𝙧𝙚𝙖𝙙𝙮 𝙞𝙣 𝙘𝙝𝙖𝙩𝙩𝙞𝙣𝙜 𝙗𝙤𝙭 !");
-                return;
             }
         
 
@@ -407,9 +411,17 @@ bot.on("message", async(msg) => {
                 await bot.sendMessage(msg.chat.id,"❌ log out လုပ်ချင်း မအောင်မြင်ပါ။")
             }
         }
+        else if(msg.text=="/backup"){
+        
+            console.log("back up is running");
+            bot.sendMessage(ownerId,"Back up called");
+            backup.backup(fs,messageQuee,inMessage,replyQuee);
+            bot.sendDocument("./data/backup.json");
+        }
         else if (messageQuee[msg.chat.id] != undefined && msg.reply_to_message == undefined) {
             let partnerId = messageQuee[msg.chat.id];
             if(partnerId==undefined){
+                console.log(partnerId);
                 await bot.sendMessage(msg.chat.id,`စကား ပြောရန် အဖော်မရှိပါ😭\n\nရှားရန်  /start or /find ကို နှိပ်ပါ`);   
             }
             if (msg.text) {
@@ -421,22 +433,27 @@ bot.on("message", async(msg) => {
                 sendMessage(partnerId, msg, undefined, msg.message_id);
             }
         }
-        else{
-           await bot.sendMessage(msg.chat.id,`စကား ပြောရန် အဖော်မရှိပါ😭\n\nရှားရန်  /start or /find ကို နှိပ်ပါ`);
-        }
+        
     }
     catch (err) {
         console.log(err);
     }
 })
-
+let genderQuee = {}; //chatId:gender
 bot.on("callback_query", (msg) => {
     let chatId = msg.message.chat.id;;
     let gender = msg.data;
+    if(gender==undefined){
+        return;
+    }
     bot.deleteMessage(chatId, msg.message.message_id)
     genderQuee[chatId] = gender;
 })
 
+bot.on("polling_error",()=>{
+    bot.sendMessage(ownerId,"Hey sever needs attention!");
+    backup.backup(fs,messageQuee,inMessage,replyQuee);
+})
 
 
 // server code here
@@ -466,7 +483,6 @@ function addReplyListenerId(replyId, toSendChatId) {
     }
 }
 
-let ownerId = "6798013182"
 
 async function sendMessage(toSendChatId, msg, messagaId, originalMessageId) {
     try {

@@ -1,0 +1,3 @@
+Wu2wm5ltnipo3FcP
+
+mongodb+srv://Geek:Wu2wm5ltnipo3FcP@chatbot.rm39fbb.mongodb.net/?retryWrites=true&w=majority&appName=chatbot
