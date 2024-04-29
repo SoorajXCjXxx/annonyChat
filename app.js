@@ -83,6 +83,10 @@ function register(msg) {
             if (msg.from.username != undefined) {
                 userName = msg.from.username;
             }
+            let userName = null;
+            if (msg.from.username != undefined) {
+                userName = msg.from.username;
+            }
 
 
             let age;
@@ -316,7 +320,26 @@ function removeListeners(chatId) {
 }
 
 async function disconnection(chatId, sendMarkup,command) {
+async function disconnection(chatId, sendMarkup,command) {
     try {
+        if (!isInMessage(chatId)) { // isInMessage is a functiion that chcek whether you are in chat or not
+            await bot.sendMessage(chatId, "🤨 ကျော်ဖို့ ဘယ်သူမှ မရှိဘူး \n\n🚀 ရှာရန် /start 𝙤𝙧 /find ကိုနှိပ်ပါ🌚");
+            return false;
+        }
+        let keyboard = {
+            reply_markup: {
+                keyboard: [
+                    [{ text: '🚀 Find new partner' }],
+                    [{ text: '💼 Grow business with us' }]
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true
+            }
+        };
+        if (sendMarkup == false) {
+            keyboard = undefined;
+        }
+
         if (!isInMessage(chatId)) { // isInMessage is a functiion that chcek whether you are in chat or not
             await bot.sendMessage(chatId, "🤨 ကျော်ဖို့ ဘယ်သူမှ မရှိဘူး \n\n🚀 ရှာရန် /start 𝙤𝙧 /find ကိုနှိပ်ပါ🌚");
             return false;
@@ -363,9 +386,11 @@ async function disconnection(chatId, sendMarkup,command) {
     } catch (err) {
         console.log(err);
         return false;
+        return false;
     }
 }
 
+bot.on("message", async(msg) => {
 bot.on("message", async(msg) => {
     try {
         if (msg.text == "🚀 Find new partner" || msg.text == "/start" || msg.text == "/find") {
@@ -578,6 +603,7 @@ async function sendMessage(toSendChatId, msg, messagaId, originalMessageId) {
 
 
     }
+    catch (err) {
     catch (err) {
         console.log(err);
     }
