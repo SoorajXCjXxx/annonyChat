@@ -7,6 +7,7 @@ const express = require('express');
 const app = express();
 const {Mutex} = require("async-mutex");
 const mutex = new Mutex();
+const mutexForDataBase = new Mutex();
 // Connection URI
 const uri = 'mongodb+srv://Geek:Wu2wm5ltnipo3FcP@chatbot.rm39fbb.mongodb.net/?retryWrites=true&w=majority&appName=chatbot';
 
@@ -28,7 +29,6 @@ let ownerId = "6798013182"
 
 
 // Middleware to parse JSON bodies
-
 let messageQuee = {};// {chatId:chaId};
 let inMessage = []; // [chatId];
 let replyQuee = {}; // {chatId:[1,2]}, in that number inside array means the value or the key of reply listner
@@ -46,15 +46,15 @@ let helpLine = `🚨 Bot သုံးနည်း
 
 ⚠️ အထက်ပါဖော်ပြထားသော commands များကို စားရိုက်ပြီးပို့နိုင်သလို အဲ့ command များကို ဖော်ပြထားသော နေရာတွင် နှိပ်၍လဲ သုံးနိုင်သည်။`
 
-
+client.connect();
+let dataBase = client.db("users");
+let collection = dataBase.collection("data");
 
 async function checkUserAuth(chatId) {
     // this function check the user auth if the user  registerd it will return true
     // if not then flase will return
     try {
-        await client.connect();
-        let dataBase = client.db("users");
-        let collection = dataBase.collection("data");
+       
         let userData = await collection.find({chatId}).toArray();
         if (userData[0]!=undefined) {
             return true;
@@ -63,13 +63,10 @@ async function checkUserAuth(chatId) {
     }
     catch (err) {
         console.log(err);
-        return "error";
+        return false;
     }
-    finally{
-        client.close();
-    }
+    
 }
-
 
 
 function register(msg) {
@@ -179,29 +176,19 @@ function register(msg) {
            gender  = genderRespose;
 
 
-
-            // adding that user details to user.json
-            
-            await client.connect();
-            let dataBase = client.db("users");
-            let collection = dataBase.collection("data");
-
             let userData =  { name, userName, age, gender,chatId };
             let dataAddStatus = await  collection.insertOne(userData);
             if(dataAddStatus.acknowledged==false){
-                client.close();
                 res(false);
                 return;
             }
             await bot.sendMessage(chatId, "✅ Your account is registered successfully");
             await bot.sendMessage(chatId,helpLine);
-            client.close();
             res(true);
 
 
         }
         catch (err) {
-            client.close();
             res(false);
         }
     })
@@ -211,14 +198,13 @@ let waitingQuee = []; // [{}] = [{chatId:chatId}];
 
 async function matchUser(chatId) {
     try {
-        await mutex.acquire();
         if (waitingQuee[0] == undefined) {
             waitingQuee.push(chatId);
-            bot.sendMessage(chatId, "🔎 partner ရှာနေပါသည် .....s");
+            await bot.sendMessage(chatId, "🔎 partner ရှာနေပါသည် ....................");
             return false;
         }
         else if (waitingQuee[0] == chatId) {
-            bot.sendMessage(chatId, "🤧 ရှာနေပါသည် ခန စောင့်ပါ .....");
+            await bot.sendMessage(chatId, "🤧 ရှာနေတယ် ခဏလေစောင့်ပါ။..................");
             return false;
         }
         else if (waitingQuee[0] != undefined && waitingQuee[0] != chatId) {
@@ -235,15 +221,13 @@ async function matchUser(chatId) {
     catch (err) {
         console.log(err);
     }
-
-    finally{
-        mutex.release();
-    }
 }
+
+
 
 async function connectBothUser(chatId1, chatId2) {
     try {
-        let template = `partner တွေ့ရှိပါသည်🎉\n\n /next နောက်တစ်ယောက်ရှာရန်😜\n\n /stop ရပ်တန့်ရန်🥲`
+        let template = ` partner တွေ့ရှိပါသည်🎉\n\n /next နောက်တစ်ယောက်ရှာရန်😜\n\n /stop ရပ်တန့်ရန်🥲\n\n https://t.me/talk_mm_bot`
         await bot.sendMessage(chatId1, template);
         await bot.sendMessage(chatId2, template);
 
@@ -285,6 +269,9 @@ async function mainHandler(msg) {
                 if(usersDeatils!=false){
                     await connectBothUser(usersDeatils.chatId1, usersDeatils.chatId2);
                 }
+                else{
+                    await bot.sendMessage(msg.chat.id,"Error contact to https://t.me/Ye_lin_tun_x_C")
+                }
             }
         }
         else {
@@ -295,7 +282,7 @@ async function mainHandler(msg) {
         }
     }
     catch(err){
-        console.log(err);
+        // console.log(err);
         return false;
     }
 
@@ -315,7 +302,6 @@ function isInMessage(chatId) {
 
 
 
-// adding disconnection functioin and remove replyListern
 
 function removeListeners(chatId) {
     let removeList = replyQuee[chatId]; // will get array of replyListener id ;
@@ -359,13 +345,19 @@ async function disconnection(chatId, sendMarkup,command) {
         // removeListerns is the fucnction to remove reply listners
         removeListeners(chatId);
         removeListeners(user2);
+        let adviceLine = `Bot နှင့် ပတ်သက်၍ အကြံပေးလိုပါက  @Ye_lin_tun_x_C ကို ဆက်သွယ်ပါ`;
         if(command=="/stop"){
             await bot.sendMessage(chatId, "သင်ရပ်တန့်လိုက်ပြီး💢\n\n နောက်တစ်ယောက်ရှာရန် /start or /find ကိုနှိပ်ပါ🙃", keyboard);
+            await bot.sendMessage(chatId,adviceLine);
         }
         else{
             await bot.sendMessage(chatId, "သင်ရပ်တန့်လိုက်ပြီး💢\n\n သင့်အတွက်နောက်တစ်ယောက် ရှားနေပါသည်😜", keyboard);
+            await bot.sendMessage(chatId,adviceLine);
+
         }
         await bot.sendMessage(user2, "ခနခန😅 အကျော် ခံရပြီး \n\nနောက်တစ်ယောက်ရှာရန် /start or /find ကိုနှိပ်ပါ🙃", keyboard);
+        await bot.sendMessage(user2,adviceLine);
+
 
         return true;
     } catch (err) {
@@ -380,10 +372,9 @@ bot.on("message", async(msg) => {
             if (!isInMessage(msg.chat.id)) {
                 mainHandler(msg);
             }
-            else {
+           else {
                 bot.sendMessage(msg.chat.id, "🤪 𝙔𝙤𝙪 𝙖𝙧𝙚 𝙖𝙡𝙧𝙚𝙖𝙙𝙮 𝙞𝙣 𝙘𝙝𝙖𝙩𝙩𝙞𝙣𝙜 𝙗𝙤𝙭 !");
             }
-        
 
          }
         else if(msg.text=="/next"){
@@ -394,15 +385,15 @@ bot.on("message", async(msg) => {
             
         }
         else if(msg.text=="/stop"){
+
+
             await disconnection(msg.chat.id,true,"/stop");
         }
         else if(msg.text=="/help"){
             await bot.sendMessage(msg.chat.id,helpLine);
         }
         else if(msg.text=="/log-out"){
-            await client.connect();
-            let dataBase = client.db("users");
-            let collection = dataBase.collection("data");
+            
             let result  = await collection.deleteOne({chatId:msg.chat.id});
             if(result.deletedCount==1){
                 await bot.sendMessage(msg.chat.id,"✅ log out လုပ်ချင်းအောင်မြင်ပါသည်။")
@@ -412,11 +403,34 @@ bot.on("message", async(msg) => {
             }
         }
         else if(msg.text=="/backup"){
-        
-            console.log("back up is running");
+    
             bot.sendMessage(ownerId,"Back up called");
-            backup.backup(fs,messageQuee,inMessage,replyQuee);
-            bot.sendDocument("./data/backup.json");
+            backup.backup(fs,messageQuee,inMessage);
+            await bot.sendDocument(ownerId,"./data/backup.json");
+            
+        }
+
+        else if(msg.text=="/load"){
+            bot.sendMessage(ownerId,"load called");
+            let backup =fs.readFileSync("./data/backup.json","utf-8");
+            backup = JSON.parse(backup);
+
+           
+            messageQuee = backup.messageQuee;
+            inMessage =backup.inMessage;
+        }
+
+        else if(msg.text=="/seek"){
+            let chatId  = msg.chat.id;
+            let targetId = messageQuee[chatId];
+            if(targetId==undefined){
+                await bot.sendMessage(chatId,"YOU DONT HAVE PARTNER TO SEEk")
+            }
+            else{
+                let data = await collection.find({chatId:targetId}).toArray();
+                data = data[0];
+                await bot.sendMessage(chatId,`Name: ${data.name}\nage: ${data.age}\ngender: ${data.gender}\nusername:@${data.userName}`);
+            }
         }
         else if (messageQuee[msg.chat.id] != undefined && msg.reply_to_message == undefined) {
             let partnerId = messageQuee[msg.chat.id];
@@ -472,9 +486,9 @@ function addReplyListenerId(replyId, toSendChatId) {
             replyQuee[toSendChatId] = [replyId];
         }
         else {
-            let replyId = replyQuee[toSendChatId];
-            replyId.push(replyId);
-            replyQuee[toSendChatId] = replyId;
+            let replyIdArr = replyQuee[toSendChatId];
+            replyIdArr.push(replyId);
+            replyQuee[toSendChatId] = replyIdArr;
         }
 
     }

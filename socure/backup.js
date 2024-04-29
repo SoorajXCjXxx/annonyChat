@@ -1,6 +1,6 @@
-function backup(fs,messageQuee,inMessage,replyQuee){
+function backup(fs,messageQuee,inMessage){
 
-    let data = {messageQuee,inMessage,replyQuee};
+    let data = {messageQuee,inMessage}
     console.log(data);
     fs.writeFileSync("./data/backup.json",JSON.stringify(data));
 }
